@@ -66,6 +66,9 @@
 #define DS3234_CONSTAT_A2F 1
 #define DS3234_CONSTAT_A1F 0
 
+#define BCD_TO_INT(X) (X & 0x0F) + (10*(X >> 4))
+#define INT_TO_BCD(X) (X % 10) | ((X / 10) << 4)
+
 /**
  * A default function for SPI bus initialization in the Master mode
  */
@@ -77,6 +80,9 @@ void __ds3234_spi_init() {
 
 	SPCR = (1<<MSTR) | (1<<CPOL) | (1<<CPHA);
 	SPCR |= (1<<SPE);
+
+	PORT_DS3234_SS &= ~(1<<DS_3234_SS);
+	PORT_DS3234_SS |= (1<<DS_3234_SS);
 }
 
 /**
@@ -105,7 +111,9 @@ void __ds3234_spi_slave_unselect() {
 /**
  * A pointer to the SPI init function. Can be set to the custom function.
  * This function must initialize the SPI bus in Master mode, set the slave select pin to which
- * _CS of the DS3234 is connected to the desired mode and drive it high. See DS3234's datasheet
+ * _CS of the DS3234 is connected to the desired mode and drive it high.
+ * It should also select and unselect the chip once, otherwise the if the
+ * first operation with the chip is writing time register the write won't work. See DS3234's datasheet
  * for the SPI parameters.
  * @see __ds3234_spi_init()
  */
@@ -132,7 +140,8 @@ void (*_ds3234_slave_unselect)() = __ds3234_spi_slave_unselect;
 
 /**
  * A structure holding time in a format with which the DS3234 is working.
- * ampm_mask holds information about wheter the clock is in 12/24 mode (bit 0)
+ * ampm_mask holds information about whether the clock is in 12/24 mode (bit 0)
+ * (1 if 12 mode, 0 if 24 mode)
  * and if in 12 mode bit 1 denotes AM/PM mode (0: AM, 1: PM)
  */
 typedef struct {
@@ -155,7 +164,54 @@ typedef struct {
 	uint8_t control;
 } DS3234_DATE;
 
+/**
+ * A function for reading time from DS3234's main time register
+ * This function is using burst reading. See DS3234's datasheet.
+ */
+void ds3234_read_time(DS3234_TIME *time) {
+	_ds3234_slave_select();
+	_ds3234_transfer(0x00); //Seconds register
+	uint8_t data = _ds3234_transfer(0x00); //Dummy byte to receive seconds register
+	time->seconds = BCD_TO_INT(data);
+	data = _ds3234_transfer(0x00); //Dummy byte to burst receive minutes register
+	time->minutes = BCD_TO_INT(data);
+	data = _ds3234_transfer(0x00); //Dummy byte to burst reveive hours register
+	if (data & (1 << 6)) {
+		//Register is in 12 hour mode
+		//If bit 4 is set (10hr bit) increment hour by 10 (Captain Obvious!)
+		time->hours = (data & (1 << 4)) ? (data & 0x0F) + 10 : (data & 0x0F);
+		time->ampm_mask = 1;
+		time->ampm_mask |= (data & (1 << 5) >> 4); //bit 5 (AM/PM) of date shifted to bit 1 of ampm_mask
+	} else {
+		//Register is in 24 hour mode
+		//Bit 6 and 7 are guaranteed to be zero in this mode
+		time->hours = BCD_TO_INT(data);
+		time->ampm_mask = 0;
+	}
+	_ds3234_slave_unselect();
+}
 
+/**
+ * A function from writing time to DS3234's main time register
+ * This function is using burst writing. See DS3234's datasheet.
+ * Please note that this function does not do any error checking, so
+ * please make sure the values are valid and in range.
+ */
+void ds3234_write_time(DS3234_TIME *time) {
+	_ds3234_slave_select();
+	_ds3234_transfer(0x80); //Write seconds register address
+	_ds3234_transfer(INT_TO_BCD(time->seconds)); //Write seconds register
+	_ds3234_transfer(INT_TO_BCD(time->minutes)); //Burst-write minutes register
+	if (time->ampm_mask) {
+		//The clock is in 12-hour mode;
+		_ds3234_transfer(INT_TO_BCD(time->hours) | (1 << 6) | ((time->ampm_mask & 2) << 5));
+		//Burst-write hours register, bit 6 meaning we are in 12 hours mode and bit 5 AM/PM value
+	} else {
+		//The clock is in 24-hour mode
+		_ds3234_transfer(INT_TO_BCD(time->hours)); //Burst-write hours register
+	}
+	_ds3234_slave_unselect();
+}
 
 
 #endif
