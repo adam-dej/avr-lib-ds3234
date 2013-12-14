@@ -1,8 +1,6 @@
 #ifndef __DS3234_H
 #define __DS3234_H
 
-#include <stdbool.h>
-
 #ifndef DD_MOSI
 	#define DD_MOSI 3
 #endif
@@ -98,6 +96,33 @@ void (*_ds3234_slave_select)() = __ds3234_spi_slave_select;
  * This function must drive the pin to which DS3234's _CS is connected high
  */
 void (*_ds3234_slave_unselect)() = __ds3234_spi_slave_unselect;
+
+/**
+ * A structure holding time in a format with which the DS3234 is working.
+ * ampm_mask holds information about wheter the clock is in 12/24 mode (bit 0)
+ * and if in 12 mode bit 1 denotes AM/PM mode (0: AM, 1: PM)
+ */
+typedef struct {
+	uint8_t seconds;
+	uint8_t minutes;
+	uint8_t hours;
+	uint8_t ampm_mask;
+} DS3234_TIME;
+
+/**
+ * A structure holding time in a format with which the DS3234 is working.
+ * control holds a century bit (bit 1) and an information whether the day_of_week (0)
+ * or day_of_month (1) is valid (bit 0) where applicable (reading and writing alarm registers)
+ */
+typedef struct {
+	uint8_t day_of_week;
+	uint8_t day_of_month;
+	uint8_t month;
+	uint8_t year;
+	uint8_t control;
+} DS3234_DATE;
+
+
 
 
 #endif
