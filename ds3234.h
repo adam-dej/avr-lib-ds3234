@@ -66,6 +66,11 @@
 #define DS3234_CONSTAT_A2F 1
 #define DS3234_CONSTAT_A1F 0
 
+#define DS3234_REG_CONTROL 0x0E
+#define DS3234_REG_CTRL_STATUS 0x0F
+#define DS3234_REG_CRYSTAL_AGING 0x10
+#define DS3234_REG_VBAT_TMP_DISABLE 0x13
+
 #define BCD_TO_INT(X) ((X) & 0x0F) + (10*((X) >> 4))
 #define INT_TO_BCD(X) ((X) - ((X)/10)*10) | (((X) / 10) << 4)
 
@@ -249,28 +254,6 @@ void ds3234_write_date(DS3234_DATE *date) {
 }
 
 /**
- * A function for determining whether the temperature conversions are disabled if DS3234 is on battery power.
- */
-uint8_t ds3234_is_bb_td() {
-	_ds3234_slave_select();
-	_ds3234_transfer(0x13);
-	uint8_t data = _ds3234_transfer(0x00);
-	_ds3234_slave_unselect();
-	return data;
-}
-
-/**
- * A function for disabling temperature conversions if DS3234 is on battery power.
- */
-void ds3234_set_bb_td(uint8_t value) {
-	_ds3234_slave_select();
-	_ds3234_transfer(0x93);
-	if (value) _ds3234_transfer(0x01);
-	else _ds3234_transfer(0x00);
-	_ds3234_slave_unselect();
-}
-
-/**
  * A function for reading temperature registers of DS3234.
  * See DS3234's datasheet page 16 for the format description.
  */
@@ -301,6 +284,28 @@ void ds3234_trigger_conversion() {
 	_ds3234_slave_select();
 	_ds3234_transfer(0x8E); //Control register write
 	_ds3234_transfer(control); //Write
+	_ds3234_slave_unselect();
+}
+
+/**
+ * A function for reading a single register.
+ */
+uint8_t ds3234_read_register(uint8_t address) {
+	_ds3234_slave_select();
+	_ds3234_transfer(address);
+	int8_t data = _ds3234_transfer(0x00); //Read the register
+	_ds3234_slave_unselect();
+	return data;
+}
+
+/**
+ * A function for writing a single register.
+ * You may also use the read address, as this is converted to write address if necessary.
+ */
+void ds3234_write_register(uint8_t address, uint8_t data) {
+	_ds3234_slave_select();
+	_ds3234_transfer(address | 0x80); //First byte of write address is one
+	_ds3234_transfer(data);
 	_ds3234_slave_unselect();
 }
 
