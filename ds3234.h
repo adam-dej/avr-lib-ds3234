@@ -248,5 +248,60 @@ void ds3234_write_date(DS3234_DATE *date) {
 	_ds3234_slave_unselect();
 }
 
+/**
+ * A function for determining whether the temperature conversions are disabled if DS3234 is on battery power.
+ */
+uint8_t ds3234_is_bb_td() {
+	_ds3234_slave_select();
+	_ds3234_transfer(0x13);
+	uint8_t data = _ds3234_transfer(0x00);
+	_ds3234_slave_unselect();
+	return data;
+}
+
+/**
+ * A function for disabling temperature conversions if DS3234 is on battery power.
+ */
+void ds3234_set_bb_td(uint8_t value) {
+	_ds3234_slave_select();
+	_ds3234_transfer(0x93);
+	if (value) _ds3234_transfer(0x01);
+	else _ds3234_transfer(0x00);
+	_ds3234_slave_unselect();
+}
+
+/**
+ * A function for reading temperature registers of DS3234.
+ * See DS3234's datasheet page 16 for the format description.
+ */
+int16_t ds3234_read_temp() {
+	int16_t temperature;
+	_ds3234_slave_select();
+	_ds3234_transfer(0x11); //Temperature register MSB
+	uint8_t msb = _ds3234_transfer(0x00); //Read MSB
+	temperature = ((msb & 128) << 15);
+	temperature |= ((msb & 127) << 2);
+	temperature |= (_ds3234_transfer(0x00) >> 6); //Burst-read LSB
+	_ds3234_slave_unselect();
+	return temperature;
+}
+
+/**
+ * A function for triggering temperature conversion
+ */
+void ds3234_trigger_conversion() {
+	uint8_t control;
+	_ds3234_slave_select();
+	_ds3234_transfer(0x0E); //Control register
+	control = _ds3234_transfer(0x00); //Read control register
+	_ds3234_slave_unselect();
+
+	control |= (1 << DS3234_CONTROL_CONV);
+
+	_ds3234_slave_select();
+	_ds3234_transfer(0x8E); //Control register write
+	_ds3234_transfer(control); //Write
+	_ds3234_slave_unselect();
+}
 
 #endif
