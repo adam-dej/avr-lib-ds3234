@@ -66,8 +66,8 @@
 #define DS3234_CONSTAT_A2F 1
 #define DS3234_CONSTAT_A1F 0
 
-#define BCD_TO_INT(X) (X & 0x0F) + (10*(X >> 4))
-#define INT_TO_BCD(X) (X % 10) | ((X / 10) << 4)
+#define BCD_TO_INT(X) ((X) & 0x0F) + (10*((X) >> 4))
+#define INT_TO_BCD(X) ((X) - ((X)/10)*10) | (((X) / 10) << 4)
 
 /**
  * A default function for SPI bus initialization in the Master mode
@@ -153,8 +153,9 @@ typedef struct {
 
 /**
  * A structure holding time in a format with which the DS3234 is working.
- * control holds a century bit (bit 1) and an information whether the day_of_week (0)
- * or day_of_month (1) is valid (bit 0) where applicable (reading and writing alarm registers)
+ * control holds a century bit (bit 0). If bit 1 is set only one of day_of_week
+ * or day_of_month values are valid, and in that case bit 2 denotes which one
+ * (0: day_of_week, 1: day_of_month)
  */
 typedef struct {
 	uint8_t day_of_week;
@@ -165,8 +166,7 @@ typedef struct {
 } DS3234_DATE;
 
 /**
- * A function for reading time from DS3234's main time register
- * This function is using burst reading. See DS3234's datasheet.
+ * A function for reading time from DS3234's main time register.
  */
 void ds3234_read_time(DS3234_TIME *time) {
 	_ds3234_slave_select();
@@ -192,8 +192,7 @@ void ds3234_read_time(DS3234_TIME *time) {
 }
 
 /**
- * A function from writing time to DS3234's main time register
- * This function is using burst writing. See DS3234's datasheet.
+ * A function for writing time to DS3234's main time register.
  * Please note that this function does not do any error checking, so
  * please make sure the values are valid and in range.
  */
@@ -210,6 +209,42 @@ void ds3234_write_time(DS3234_TIME *time) {
 		//The clock is in 24-hour mode
 		_ds3234_transfer(INT_TO_BCD(time->hours)); //Burst-write hours register
 	}
+	_ds3234_slave_unselect();
+}
+
+/**
+ * A function for reading date from DS3234's main date register.
+ * In returned DS3234_DATE structure both day_of_week and day_of_month are valid.
+ */
+void ds3234_read_date(DS3234_DATE *date) {
+	uint8_t data;
+	_ds3234_slave_select();
+	_ds3234_transfer(0x03); //Day register address
+	data = _ds3234_transfer(0x00); //Read day register
+	date->day_of_week = BCD_TO_INT(data);
+	data = _ds3234_transfer(0x00); //Burst-read day register
+	date->day_of_month = BCD_TO_INT(data); //Burst-read date register
+	data = _ds3234_transfer(0x03); //Burst-read month and century register
+	date->month = BCD_TO_INT(data & 0x7F); //Ommit the century bit
+	date->control = 0;
+	if (data & 0x80) date->control |= 1;
+	data = _ds3234_transfer(0x00); //Burst-read year register
+	date->year = BCD_TO_INT(data);
+	_ds3234_slave_unselect();
+}
+
+/**
+ * A function for writing date to DS3234's main date register.
+ * Please note that this function does not do any error checking. Both day_of_week
+ * and day_of_month must be valid.
+ */
+void ds3234_write_date(DS3234_DATE *date) {
+	_ds3234_slave_select();
+	_ds3234_transfer(0x83); //Write day register address
+	_ds3234_transfer(INT_TO_BCD(date->day_of_week));
+	_ds3234_transfer(INT_TO_BCD(date->day_of_month));
+	_ds3234_transfer(INT_TO_BCD(date->month));
+	_ds3234_transfer(INT_TO_BCD(date->year));
 	_ds3234_slave_unselect();
 }
 
