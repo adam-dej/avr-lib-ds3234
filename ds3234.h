@@ -493,4 +493,48 @@ void ds3234_write_alarm2(DS3234_DATE *date, DS3234_TIME *time, uint8_t alarm_mas
 	_ds3234_slave_unselect(); //Burst-write alarm 2 registers
 }
 
+/**
+ * A function for reading RAM of DS3234.
+ * Make sure the *data is big enough for length of uint8_t's. If address + length > 256
+ * the address will overflow and data from beginning will be read.
+ */
+void ds3234_read_RAM(uint8_t address, uint8_t length, uint8_t *data) {
+	_ds3234_slave_select();
+	_ds3234_transfer(0x98); //SRAM Address register
+	_ds3234_transfer(address); //SRAM address
+	_ds3234_slave_unselect();
+
+	_ds3234_slave_select();
+	_ds3234_transfer(0x19); //SRAM Data register
+	while (--length) {
+		*data = _ds3234_transfer(0x00); //Burst transfer contents of the register.
+		//During this transfer the Register address won't change, hovewer, SRAM adress in
+		//SRAM address register will increment automatically, see DS3234's datasheet page 17.
+		data++;
+	}
+	_ds3234_slave_unselect();
+}
+
+/**
+ * A function for writing RAM of DS3234.
+ * Make sure the *data is big enough for length of uint8_t's. If address + length > 256
+ * the address will overflow and data will be written to the beginning of the RAM.
+ */
+void ds3234_write_RAM(uint8_t address, uint8_t length, uint8_t *data) {
+	_ds3234_slave_select();
+	_ds3234_transfer(0x98); //SRAM Address register
+	_ds3234_transfer(address); //SRAM address
+	_ds3234_slave_unselect();
+
+	_ds3234_slave_select();
+	_ds3234_transfer(0x99); //SRAM write data register
+	while (--length) {
+		_ds3234_transfer(*data); //Burst transfer contents of the register.
+		//During this transfer the Register address won't change, hovewer, SRAM adress in
+		//SRAM address register will increment automatically, see DS3234's datasheet page 17.
+		data++;
+	}
+	_ds3234_slave_unselect();
+}
+
 #endif
