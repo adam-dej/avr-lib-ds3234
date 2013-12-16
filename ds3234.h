@@ -1,3 +1,19 @@
+/*
+Copyright 2013 Adam Dej.
+This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef __DS3234_H
 #define __DS3234_H
 
@@ -75,6 +91,38 @@
 #define INT_TO_BCD(X) ((X) - ((X)/10)*10) | (((X) / 10) << 4)
 
 /**
+ * A pointer to the SPI init function. Can be set to the custom function.
+ * This function must initialize the SPI bus in Master mode, set the slave select pin to which
+ * _CS of the DS3234 is connected to the desired mode and drive it high.
+ * It should also select and unselect the chip once, otherwise the if the
+ * first operation with the chip is writing time register the write won't work. See DS3234's datasheet
+ * for the SPI parameters.
+ * @see __ds3234_spi_init()
+ */
+void (*_ds3234_init)() = NULL;
+
+/**
+ * A pointer to the SPI transfer function. Can be set to the custom function.
+ * This function must send a byte over the SPI bus to which DS3234 is connected and
+ * return the received byte. This function MUST NOT change state of the slave select pin.
+ */
+uint8_t (*_ds3234_transfer)(uint8_t) = NULL;
+
+/**
+ * A pointer to the SPI slave select function. Can be set to the custom function.
+ * This function must drive the pin to which DS3234's _CS is connected low
+ */
+void (*_ds3234_slave_select)() = NULL;
+
+/**
+ * A pointer to the SPI slave unselect function. Can be set to the custom function.
+ * This function must drive the pin to which DS3234's _CS is connected high
+ */
+void (*_ds3234_slave_unselect)() = NULL;
+
+#ifdef DS3234_USE_DEFAULT_SPI
+
+/**
  * A default function for SPI bus initialization in the Master mode
  */
 void __ds3234_spi_init() {
@@ -113,35 +161,25 @@ void __ds3234_spi_slave_unselect() {
 	PORT_DS3234_SS |= (1<<DS_3234_SS);
 }
 
-/**
- * A pointer to the SPI init function. Can be set to the custom function.
- * This function must initialize the SPI bus in Master mode, set the slave select pin to which
- * _CS of the DS3234 is connected to the desired mode and drive it high.
- * It should also select and unselect the chip once, otherwise the if the
- * first operation with the chip is writing time register the write won't work. See DS3234's datasheet
- * for the SPI parameters.
- * @see __ds3234_spi_init()
- */
-void (*_ds3234_init)() = __ds3234_spi_init;
+#endif
 
 /**
- * A pointer to the SPI transfer function. Can be set to the custom function.
- * This function must send a byte over the SPI bus to which DS3234 is connected and
- * return the received byte. This function MUST NOT change state of the slave select pin.
+ * Initializes SPI for use with the DS3234.
+ * If DS3234_USE_DEFAULT_SPI is defined library builtin
+ * SPI functions are used, and function pointers are also assigned. If not, the user must
+ * manually assing his own functions to the function pointers before invoking this function.
  */
-uint8_t (*_ds3234_transfer)(uint8_t) = __ds3234_spi_transfer;
+void ds3234_init() {
 
-/**
- * A pointer to the SPI slave select function. Can be set to the custom function.
- * This function must drive the pin to which DS3234's _CS is connected low
- */
-void (*_ds3234_slave_select)() = __ds3234_spi_slave_select;
+#ifdef DS3234_USE_DEFAULT_SPI
+	_ds3234_init = &__ds3234_spi_init;
+	_ds3234_transfer = &__ds3234_spi_transfer;
+	_ds3234_slave_select = &__ds3234_spi_slave_select;
+	_ds3234_slave_unselect = &__ds3234_spi_slave_unselect;
+#endif
 
-/**
- * A pointer to the SPI slave unselect function. Can be set to the custom function.
- * This function must drive the pin to which DS3234's _CS is connected high
- */
-void (*_ds3234_slave_unselect)() = __ds3234_spi_slave_unselect;
+	_ds3234_init();
+}
 
 /**
  * A structure holding time in a format with which the DS3234 is working.
