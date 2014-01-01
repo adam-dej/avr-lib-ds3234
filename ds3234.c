@@ -323,7 +323,7 @@ void ds3234_read_RAM(uint8_t address, uint8_t length, uint8_t *data) {
 
 	_ds3234_slave_select();
 	_ds3234_transfer(0x19); //SRAM Data register
-	while (--length) {
+	while (length--) {
 		*data = _ds3234_transfer(0x00); //Burst transfer contents of the register.
 		//During this transfer the Register address won't change, hovewer, SRAM adress in
 		//SRAM address register will increment automatically, see DS3234's datasheet page 17.
@@ -340,7 +340,7 @@ void ds3234_write_RAM(uint8_t address, uint8_t length, uint8_t *data) {
 
 	_ds3234_slave_select();
 	_ds3234_transfer(0x99); //SRAM write data register
-	while (--length) {
+	while (length--) {
 		_ds3234_transfer(*data); //Burst transfer contents of the register.
 		//During this transfer the Register address won't change, hovewer, SRAM adress in
 		//SRAM address register will increment automatically, see DS3234's datasheet page 17.
